@@ -13,8 +13,8 @@ export const fetchAntigens = (search = '', limit = 50) =>
     api.get('/api/v5/antigens', { params: { search, limit } }).then(r => r.data?.antigens || []);
 
 /* ── Scoring ──────────────────────────────────────────── */
-export const scoreAntigen = (antigen_name) =>
-    api.post('/api/v5/score', { antigen_name }).then(r => r.data);
+export const scoreAntigen = (antigen_name: string, cancer_type?: string) =>
+    api.post('/api/v5/score', { antigen_name, ...(cancer_type ? { cancer_type } : {}) }).then(r => r.data);
 
 export const batchScore = (antigens) =>
     api.post('/api/v5/batch_score', { antigens }).then(r => r.data);
@@ -43,7 +43,7 @@ export const fetchStratification = (antigen_name, cancer_type = null) =>
 
 /* ── NLP Query ────────────────────────────────────────── */
 export const executeQuery = (query: string, limit?: number) =>
-    api.post('/api/v5/query', { query, limit }, { timeout: 300000 }).then(r => r.data);
+    api.post('/api/query', { query, limit }, { timeout: 300000 }).then(r => r.data);
 
 /* ── Clinical Trials ──────────────────────────────────── */
 export const fetchClinicalTrials = (antigen) =>
@@ -121,5 +121,43 @@ export const fetchAuditLog = (limit = 100) =>
 /* ── Batch Upload ─────────────────────────────────────── */
 export const batchUpload = (genes: string[], cancer_type?: string) =>
     api.post('/api/v5/batch-upload', { genes, cancer_type }).then(r => r.data);
+
+/* ═══════════════════════════════════════════════════════════
+   Genomic File Upload & Analysis
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Quick Analyze (upload + detect abnormalities) ────── */
+export const genomicQuickAnalyze = (file: File, cancer_type?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const params: any = {};
+    if (cancer_type) params.cancer_type = cancer_type;
+    return api.post('/api/v5/genomics/quick-analyze', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        params,
+        timeout: 120000,
+    }).then(r => r.data);
+};
+
+/* ── Upload genomic file ─────────────────────────────── */
+export const genomicUpload = (file: File, analysis_id: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/api/v5/genomics/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        params: { analysis_id },
+        timeout: 120000,
+    }).then(r => r.data);
+};
+
+/* ── Analyze abnormalities ───────────────────────────── */
+export const genomicAnalyzeAbnormalities = (analysis_id: string, cancer_type?: string) =>
+    api.post(`/api/v5/genomics/analyze-abnormalities/${analysis_id}`, null, {
+        params: { cancer_type: cancer_type || 'unknown' },
+    }).then(r => r.data);
+
+/* ── Genomic analysis summary ────────────────────────── */
+export const genomicSummary = (analysis_id: string) =>
+    api.get(`/api/v5/genomics/summary/${analysis_id}`).then(r => r.data);
 
 export default api;

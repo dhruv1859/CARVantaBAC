@@ -7,7 +7,7 @@ echo.
 
 :: Start backend in a new window
 echo [1/2] Starting Backend (port 8001)...
-start "CARVanta Backend" cmd /k "cd /d C:\Users\dhruv\CARVanta && C:\Users\dhruv\carvanta_env\Scripts\python.exe -m uvicorn api.main:app --host 0.0.0.0 --port 8001"
+start "CARVanta Backend" cmd /k "cd /d C:\Users\dhruv\CARVanta && C:\Users\dhruv\CARVanta\Scripts\python.exe -m uvicorn api.main:app --host 0.0.0.0 --port 8001"
 
 :: Wait for backend to initialize
 echo      Waiting for backend to load...

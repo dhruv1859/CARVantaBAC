@@ -35,6 +35,12 @@ build/
 .venv/
 venv/
 env/
+Include/
+Lib/
+scripts/
+share/
+etc/
+pyvenv.cfg
 
 # ─── Node / React ─────────────────────────────────────────────────────────────
 node_modules/
@@ -69,3 +75,6 @@ desktop.ini
 
 # ─── Docker ────────────────────────────────────────────────────────────────────
 docker-compose.override.yml
+
+# ─── Hackathon Projects (separate git repos) ──────────────────────────────
+sentient-architect/

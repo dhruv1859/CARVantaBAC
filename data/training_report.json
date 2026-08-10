@@ -1,5 +1,5 @@
 {
-  "version": "v3",
+  "version": "v5",
   "features": [
     "tumor_specificity",
     "normal_expression_risk",
@@ -9,77 +9,99 @@
     "immunogenicity_score",
     "surface_accessibility",
     "clinical_boost",
-    "composite_score"
+    "composite_score",
+    "cancer_type_encoded"
   ],
   "dataset_rows": 119816,
+  "augmented_rows": 239632,
   "viable_count": 20248,
   "cv_metrics": {
     "accuracy": {
-      "mean": 0.9993,
-      "std": 0.0002
-    },
-    "precision": {
-      "mean": 0.9967,
+      "mean": 0.9692,
       "std": 0.0003
     },
+    "precision": {
+      "mean": 0.876,
+      "std": 0.0014
+    },
     "recall": {
-      "mean": 0.9994,
-      "std": 0.0008
+      "mean": 0.9524,
+      "std": 0.0021
     },
     "f1": {
-      "mean": 0.9981,
-      "std": 0.0005
+      "mean": 0.9126,
+      "std": 0.0008
     },
     "roc_auc": {
-      "mean": 1.0,
-      "std": 0.0
+      "mean": 0.994,
+      "std": 0.0004
     }
   },
   "cv_fold_results": [
     {
       "fold": 1,
-      "accuracy": 0.9994,
-      "precision": 0.9966,
-      "recall": 1.0,
-      "f1": 0.9983,
-      "roc_auc": 1.0
+      "accuracy": 0.9692,
+      "precision": 0.8776,
+      "recall": 0.9506,
+      "f1": 0.9126,
+      "roc_auc": 0.9941
     },
     {
       "fold": 2,
-      "accuracy": 0.999,
-      "precision": 0.9965,
-      "recall": 0.9978,
-      "f1": 0.9972,
-      "roc_auc": 1.0
+      "accuracy": 0.969,
+      "precision": 0.8735,
+      "recall": 0.9546,
+      "f1": 0.9122,
+      "roc_auc": 0.9942
     },
     {
       "fold": 3,
-      "accuracy": 0.9995,
-      "precision": 0.9968,
-      "recall": 1.0,
-      "f1": 0.9984,
-      "roc_auc": 1.0
+      "accuracy": 0.9691,
+      "precision": 0.8765,
+      "recall": 0.9512,
+      "f1": 0.9123,
+      "roc_auc": 0.9938
     },
     {
       "fold": 4,
-      "accuracy": 0.9993,
-      "precision": 0.9966,
-      "recall": 0.9995,
-      "f1": 0.998,
-      "roc_auc": 1.0
+      "accuracy": 0.9697,
+      "precision": 0.8764,
+      "recall": 0.9553,
+      "f1": 0.9142,
+      "roc_auc": 0.9943
     },
     {
       "fold": 5,
-      "accuracy": 0.9995,
-      "precision": 0.9973,
-      "recall": 0.9995,
-      "f1": 0.9984,
-      "roc_auc": 1.0
+      "accuracy": 0.9689,
+      "precision": 0.8762,
+      "recall": 0.9502,
+      "f1": 0.9117,
+      "roc_auc": 0.9933
     }
   ],
-  "train_accuracy": 1.0,
-  "train_precision": 0.9998,
+  "train_accuracy": 0.9947,
+  "train_precision": 0.9697,
   "train_recall": 1.0,
-  "train_f1": 0.9999,
-  "feature_importance": {}
+  "train_f1": 0.9846,
+  "feature_importance": {},
+  "cancer_type_encoding": {
+    "leukemia": 0,
+    "lymphoma": 1,
+    "myeloma": 2,
+    "prostate cancer": 3,
+    "melanoma": 4,
+    "glioblastoma": 5,
+    "liver cancer": 6,
+    "ovarian cancer": 7,
+    "gastric cancer": 8,
+    "pancreatic cancer": 9,
+    "lung adenocarcinoma": 10,
+    "renal cancer": 11,
+    "breast cancer": 12,
+    "bladder cancer": 13,
+    "colorectal cancer": 14,
+    "head & neck cancer": 15,
+    "endometrial cancer": 16,
+    "thyroid cancer": 17
+  }
 }

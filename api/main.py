@@ -150,6 +150,7 @@ else:
 
 class AntigenRequest(BaseModel):
     antigen_name: str
+    cancer_type: Optional[str] = None
 
 class BatchAntigenRequest(BaseModel):
     antigens: list[str]
@@ -502,10 +503,15 @@ async def list_antigens(search: str = "", limit: int = 50):
 @app.post("/api/v5/score")
 async def score_antigen(request: AntigenRequest):
 
-    features = generate_features(request.antigen_name)
+    # v5: Cancer-type-aware features — same antigen scores differently
+    # in different cancer contexts (e.g., CD19 in Leukemia vs Melanoma)
+    if request.cancer_type:
+        features = generate_features_for_cancer(request.antigen_name, request.cancer_type)
+    else:
+        features = generate_features(request.antigen_name)
     
     result = compute_cvs(features)
-    ml_result = predict_viability(features)
+    ml_result = predict_viability(features, cancer_type=request.cancer_type or "")
     # Explain ML reasoning
     importance = ml_result.get("importance", {})
 
@@ -570,8 +576,8 @@ async def score_antigen(request: AntigenRequest):
         antigen_name=request.antigen_name,
     )
     safety_insight = generate_safety_insight(features, antigen_name=request.antigen_name)
-    # v4: Add ML ranking score
-    ml_ranking = predict_ranking_score(features)
+    # v5: Cancer-type-aware ML ranking score
+    ml_ranking = predict_ranking_score(features, cancer_type=request.cancer_type or "")
 
     return {
         "input": {

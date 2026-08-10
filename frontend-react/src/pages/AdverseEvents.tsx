@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import '../styles/digital-twin.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API = import.meta.env.PROD ? 'https://carvanta.onrender.com' : '';
 
 export default function AdverseEvents() {
   const [activeTab, setActiveTab] = useState<'predict'|'crs_kinetics'|'cytopenia'>('predict');

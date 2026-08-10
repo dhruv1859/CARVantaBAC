@@ -4,7 +4,7 @@ import { fetchAntigens, fetchClinicalTrials } from '../api/client';
 import { ErrorMsg, StatsCard } from '../components/UIComponents';
 import PageLoader from '../components/PageLoader';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API = import.meta.env.PROD ? 'https://carvanta.onrender.com' : '';
 
 type DashTab = 'trials' | 'safety' | 'rwe' | 'regulatory';
 

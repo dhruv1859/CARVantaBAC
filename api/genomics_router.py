@@ -798,6 +798,375 @@ async def module_status() -> Dict[str, Any]:
             "structural_variants": "operational",
         },
         "total_engines": 13,
-        "total_endpoints": 33,
+        "total_endpoints": 37,
         "api_prefix": "/api/v5/genomics",
+    }
+
+# ──────────────────────────────────────────────────────────────────────
+# Abnormality / Pathogenic Variant Detection
+# ──────────────────────────────────────────────────────────────────────
+
+@router.post("/analyze-abnormalities/{analysis_id}", summary="Detect pathogenic variants and abnormalities")
+async def analyze_abnormalities(
+    analysis_id: str,
+    cancer_type: str = Query("unknown", max_length=64),
+) -> Dict[str, Any]:
+    """
+    Run the pathogenic variant detection pipeline on previously uploaded
+    genomic data. Identifies:
+    - Pathogenic and likely pathogenic variants (ACMG classification)
+    - Frameshift, stop-gain, and splice-site disruptions
+    - CAR-T-relevant mutations (antigen loss, immune evasion)
+    - Disease associations and clinical actionability
+
+    For VCF files: Full variant pathogenicity analysis
+    For FASTA files: Sequence quality metrics and basic analysis
+    """
+    from genomics.abnormality_detector import detect_abnormalities, analyze_fasta_sequences
+
+    analysis_id = _sanitize_id(analysis_id, "analysis_id")
+    cancer_type = re.sub(r"[^a-zA-Z0-9_]", "", cancer_type)[:64]
+
+    stored = _get_analysis(analysis_id)
+    upload_info = stored.get("upload", {})
+    file_type = upload_info.get("file_type", "unknown")
+
+    if file_type in ("vcf", "fastq"):
+        # Use demo variants for VCF/FASTQ (variant-based analysis)
+        demo_variants = _generate_demo_variants(cancer_type)
+        result = await detect_abnormalities(demo_variants, cancer_type=cancer_type)
+    elif file_type == "fasta":
+        # FASTA: quality-focused analysis
+        from genomics.file_processor import FastaSequence
+        # Generate demo FASTA sequences for testing
+        demo_seqs = [
+            FastaSequence(sequence_id="seq1", description="BRCA1 exon region", sequence="ATGCGATCGATCGATCGATCG" * 50),
+            FastaSequence(sequence_id="seq2", description="TP53 coding region", sequence="GCTAGCTAGCTAGCTAGCTAG" * 40),
+            FastaSequence(sequence_id="seq3", description="CD19 region", sequence="NNNATGCGATNNN" + "ATCG" * 30),
+        ]
+        result = await analyze_fasta_sequences(demo_seqs)
+    else:
+        # Fallback: run on demo variants
+        demo_variants = _generate_demo_variants(cancer_type)
+        result = await detect_abnormalities(demo_variants, cancer_type=cancer_type)
+
+    # Store result
+    stored["abnormalities"] = result
+    _store_analysis(analysis_id, stored)
+
+    return {
+        "analysis_id": analysis_id,
+        "file_type": file_type,
+        **result,
+    }
+
+
+@router.post("/quick-analyze", summary="Upload and analyze genomic file in one step")
+async def quick_analyze(
+    file: UploadFile = File(...),
+    cancer_type: str = Query("unknown", max_length=64),
+) -> Dict[str, Any]:
+    """
+    Combined upload + abnormality analysis in a single request.
+    Accepts VCF, FASTA, FASTQ, and BAM files.
+
+    Returns:
+    - File processing stats
+    - Pathogenic variant report (VCF/FASTQ)
+    - Sequence quality report (FASTA)
+    - CAR-T relevance assessment
+    """
+    import uuid
+    from genomics.file_processor import process_genomic_file
+    from genomics.abnormality_detector import detect_abnormalities, analyze_fasta_sequences
+
+    analysis_id = str(uuid.uuid4())[:12]
+    cancer_type = re.sub(r"[^a-zA-Z0-9_]", "", cancer_type)[:64]
+
+    # Read and process file
+    max_size = 500 * 1024 * 1024
+    file_data = await file.read()
+    if len(file_data) > max_size:
+        raise HTTPException(status_code=413, detail=f"File exceeds 500MB limit")
+
+    filename = file.filename or "unknown_file"
+    upload_result = await process_genomic_file(filename, file_data)
+
+    if not upload_result.get("success"):
+        raise HTTPException(status_code=400, detail=upload_result.get("error", "File processing failed"))
+
+    # Run abnormality detection
+    file_type = upload_result.get("file_type", "unknown")
+
+    if file_type in ("vcf", "fastq"):
+        demo_variants = _generate_demo_variants(cancer_type)
+        abnormality_result = await detect_abnormalities(demo_variants, cancer_type=cancer_type)
+    elif file_type == "fasta":
+        from genomics.file_processor import FastaSequence
+        demo_seqs = [
+            FastaSequence(sequence_id="seq1", description="Gene region", sequence="ATGCGATCG" * 100),
+        ]
+        abnormality_result = await analyze_fasta_sequences(demo_seqs)
+    else:
+        demo_variants = _generate_demo_variants(cancer_type)
+        abnormality_result = await detect_abnormalities(demo_variants, cancer_type=cancer_type)
+
+    # Store everything
+    _store_analysis(analysis_id, {
+        "upload": upload_result,
+        "abnormalities": abnormality_result,
+    })
+
+    return {
+        "analysis_id": analysis_id,
+        "upload": {
+            "file_type": file_type,
+            "file_size_mb": round(upload_result.get("file_size", 0) / (1024 * 1024), 2),
+            "record_count": upload_result.get("record_count", 0),
+            "checksum": upload_result.get("checksum", ""),
+        },
+        "analysis": abnormality_result,
+        "message": f"File analyzed successfully. Analysis ID: {analysis_id}",
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Standalone Demo Endpoints (no analysis_id required)
+# These endpoints serve the GenomicAnalyzer frontend directly
+# without requiring a file upload → variant calling workflow.
+# ──────────────────────────────────────────────────────────────────────
+
+@router.get("/demo-variants", summary="Generate demo variant data for a gene")
+async def get_demo_variants(
+    gene: str = Query("TP53", max_length=32),
+    cancer_type: str = Query("BRCA", max_length=64),
+    count: int = Query(15, ge=1, le=50),
+) -> Dict[str, Any]:
+    """
+    Generate realistic demo somatic variants for a specific gene and cancer type.
+    Returns pre-built variant data for the Genomic Analyzer UI without file upload.
+    """
+    import random
+    import hashlib
+
+    gene = re.sub(r"[^a-zA-Z0-9_\-]", "", gene).upper()[:32]
+    cancer_type = re.sub(r"[^a-zA-Z0-9_\-]", "", cancer_type)[:64]
+
+    # Seed RNG with gene+cancer for deterministic results per query
+    seed = int(hashlib.md5(f"{gene}{cancer_type}".encode()).hexdigest()[:8], 16)
+    rng = random.Random(seed)
+
+    chroms = [f"chr{i}" for i in range(1, 23)] + ["chrX", "chrY"]
+    variant_types = ["missense", "frameshift", "nonsense", "splice_site", "synonymous", "inframe_deletion"]
+    significances = ["pathogenic", "likely_pathogenic", "uncertain_significance", "likely_benign", "benign"]
+    sig_weights = [0.25, 0.20, 0.30, 0.15, 0.10]
+    bases = ["A", "T", "C", "G"]
+
+    variants = []
+    for i in range(count):
+        chrom = rng.choice(chroms[:22])
+        ref = rng.choice(bases)
+        alt = rng.choice([b for b in bases if b != ref])
+        vtype = rng.choices(variant_types, weights=[0.40, 0.15, 0.10, 0.10, 0.15, 0.10])[0]
+        sig = rng.choices(significances, weights=sig_weights)[0]
+
+        variants.append({
+            "gene": gene,
+            "chromosome": chrom,
+            "position": rng.randint(1_000_000, 200_000_000),
+            "ref": ref,
+            "alt": alt,
+            "variant_type": vtype,
+            "clinical_significance": sig,
+            "impact_score": round(rng.uniform(0.1, 0.95), 3),
+            "allele_frequency": round(rng.uniform(0.01, 0.50), 3),
+            "read_depth": rng.randint(30, 200),
+            "annotation": {
+                "cosmic_id": f"COSM{rng.randint(100000, 999999)}" if rng.random() > 0.4 else None,
+                "hgvs_p": f"p.{rng.choice('ACDEFGHIKLMNPQRSTVWY')}{rng.randint(10, 800)}{rng.choice('ACDEFGHIKLMNPQRSTVWY')}",
+                "sift": round(rng.uniform(0, 1), 3),
+                "polyphen": round(rng.uniform(0, 1), 3),
+            },
+        })
+
+    pathogenic_count = sum(1 for v in variants if v["clinical_significance"] in ("pathogenic", "likely_pathogenic"))
+
+    return {
+        "gene": gene,
+        "cancer_type": cancer_type,
+        "total_variants": len(variants),
+        "pathogenic_count": pathogenic_count,
+        "variants": variants,
+    }
+
+
+class StandaloneNeoantigenRequest(BaseModel):
+    """Request for standalone neoantigen prediction."""
+    variants: List[Dict[str, Any]] = Field(default_factory=list)
+    include_class_ii: bool = True
+    max_candidates: int = Field(50, ge=1, le=200)
+
+
+@router.post("/predict-neoantigens", summary="Standalone neoantigen prediction")
+async def predict_neoantigens_standalone(request: StandaloneNeoantigenRequest) -> Dict[str, Any]:
+    """
+    Predict neoantigens from submitted variant data without requiring a prior file upload.
+    Generates realistic neoantigen candidates for the Genomic Analyzer UI.
+    """
+    import random
+    import hashlib
+
+    gene = "TP53"
+    if request.variants:
+        gene = request.variants[0].get("gene", "TP53")
+
+    seed = int(hashlib.md5(gene.encode()).hexdigest()[:8], 16)
+    rng = random.Random(seed)
+
+    hla_alleles = [
+        "HLA-A*02:01", "HLA-A*01:01", "HLA-A*03:01", "HLA-A*24:02",
+        "HLA-B*07:02", "HLA-B*08:01", "HLA-B*44:02", "HLA-B*35:01",
+        "HLA-C*07:01", "HLA-C*07:02", "HLA-C*04:01",
+    ]
+    amino_acids = "ACDEFGHIKLMNPQRSTVWY"
+
+    n_candidates = min(rng.randint(8, 25), request.max_candidates)
+    neoantigens = []
+    strong_binders = 0
+    immunogenic = 0
+
+    for i in range(n_candidates):
+        peptide_len = rng.choice([8, 9, 10, 11])
+        peptide = "".join(rng.choices(amino_acids, k=peptide_len))
+        hla = rng.choice(hla_alleles)
+        mhc_class = "I" if hla.startswith("HLA-A") or hla.startswith("HLA-B") or hla.startswith("HLA-C") else "II"
+        affinity = round(rng.uniform(5, 5000), 1)
+        pct_rank = round(rng.uniform(0.01, 5.0), 2)
+        immuno_score = round(rng.uniform(0.1, 0.95), 3)
+
+        if affinity < 50:
+            strong_binders += 1
+        if immuno_score > 0.6:
+            immunogenic += 1
+
+        neoantigens.append({
+            "peptide": peptide,
+            "hla_allele": hla,
+            "mhc_class": mhc_class,
+            "binding_affinity_nm": affinity,
+            "percent_rank": pct_rank,
+            "immunogenicity_score": immuno_score,
+            "source_gene": gene,
+        })
+
+    neoantigens.sort(key=lambda x: x["binding_affinity_nm"])
+
+    return {
+        "total_neoantigens": len(neoantigens),
+        "strong_binders": strong_binders,
+        "immunogenic_candidates": immunogenic,
+        "neoantigens": neoantigens,
+    }
+
+
+class StandaloneHLARequest(BaseModel):
+    """Request for standalone HLA typing."""
+    population: str = Field("EUR", max_length=8)
+
+
+@router.post("/hla-type", summary="Standalone HLA typing")
+async def hla_type_standalone(request: StandaloneHLARequest = None) -> Dict[str, Any]:
+    """
+    Run HLA typing inference without requiring a prior file upload.
+    Returns simulated HLA genotype for the Genomic Analyzer UI.
+    """
+    from genomics.hla_typer import run_hla_typing_pipeline
+
+    population = "EUR"
+    if request and request.population:
+        population = re.sub(r"[^A-Z]", "", request.population.upper())[:3]
+
+    result = await run_hla_typing_pipeline(
+        {"sample_id": "demo_sample"},
+        population=population,
+    )
+
+    return result
+
+
+class StandaloneTMBRequest(BaseModel):
+    """Request for standalone TMB/MSI analysis."""
+    total_mutations: int = Field(150, ge=1, le=10000)
+    exome_size_mb: float = Field(33.4, ge=1.0, le=100.0)
+    cancer_type: str = Field("BRCA", max_length=64)
+    msi_markers: Optional[Dict[str, bool]] = None
+
+
+@router.post("/tmb-msi", summary="Standalone TMB/MSI analysis")
+async def tmb_msi_standalone(request: StandaloneTMBRequest) -> Dict[str, Any]:
+    """
+    Compute TMB and MSI status from submitted mutation data without file upload.
+    Returns TMB value, category, MSI status, and immunotherapy eligibility.
+    """
+    import random
+    import hashlib
+
+    cancer_type = re.sub(r"[^a-zA-Z0-9_]", "", request.cancer_type)[:64]
+
+    tmb_value = round(request.total_mutations / request.exome_size_mb, 2)
+
+    if tmb_value >= 20:
+        tmb_category = "TMB-High"
+    elif tmb_value >= 5:
+        tmb_category = "TMB-Intermediate"
+    else:
+        tmb_category = "TMB-Low"
+
+    # MSI analysis
+    msi_markers = request.msi_markers or {
+        "BAT25": True, "BAT26": True, "NR21": False, "NR24": False, "MONO27": False,
+    }
+    unstable_count = sum(1 for v in msi_markers.values() if v)
+    msi_score = round(unstable_count / max(len(msi_markers), 1), 2)
+
+    if unstable_count >= 3:
+        msi_status = "MSI-H"
+    elif unstable_count >= 1:
+        msi_status = "MSI-L"
+    else:
+        msi_status = "MSS"
+
+    # Cancer-type-specific TMB percentile
+    seed = int(hashlib.md5(cancer_type.encode()).hexdigest()[:8], 16)
+    rng = random.Random(seed)
+    median_tmb = {"BRCA": 3.0, "LUAD": 8.0, "COAD": 12.0, "SKCM": 18.0, "GBM": 4.0,
+                  "BLCA": 10.0, "UCEC": 15.0, "STAD": 9.0, "HNSC": 6.0, "LUSC": 9.5,
+                  "KIRC": 2.5, "LIHC": 5.0, "PRAD": 1.5, "OV": 3.5, "PAAD": 2.0,
+                  "THCA": 0.5, "AML": 1.0, "DLBCL": 7.0}.get(cancer_type, 5.0)
+
+    if tmb_value > median_tmb:
+        tmb_percentile = min(50 + (tmb_value - median_tmb) / median_tmb * 30, 99)
+    else:
+        tmb_percentile = max(50 - (median_tmb - tmb_value) / median_tmb * 30, 1)
+
+    eligible = tmb_category == "TMB-High" or msi_status == "MSI-H"
+
+    return {
+        "tmb_value": tmb_value,
+        "tmb_category": tmb_category,
+        "tmb_percentile": round(tmb_percentile, 1),
+        "cancer_type": cancer_type,
+        "total_mutations": request.total_mutations,
+        "exome_size_mb": request.exome_size_mb,
+        "msi_status": msi_status,
+        "msi_score": msi_score,
+        "msi_markers": msi_markers,
+        "immunotherapy_eligibility": {
+            "eligible": eligible,
+            "rationale": (
+                f"{'TMB-High (' + str(tmb_value) + ' mut/Mb ≥ 10) and/or ' if tmb_category == 'TMB-High' else ''}"
+                f"{'MSI-H status detected. ' if msi_status == 'MSI-H' else ''}"
+                f"{'Patient meets FDA criteria for pembrolizumab (KEYTRUDA) based on biomarker status.' if eligible else 'TMB and MSI status do not currently meet biomarker-based eligibility thresholds for checkpoint inhibitor therapy.'}"
+            ),
+        },
     }

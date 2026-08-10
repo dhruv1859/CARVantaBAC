@@ -45,6 +45,7 @@ const NAV_SECTIONS: NavSection[] = [
         items: [
             { path: '/twin', icon: '🧑‍⚕️', label: 'Digital Twin' },
             { path: '/genomics', icon: '🧬', label: 'Genomic Profiler' },
+            { path: '/genome-upload', icon: '📤', label: 'Genome Upload' },
             { path: '/stratify', icon: '👥', label: 'Stratification' },
             { path: '/wizard', icon: '📝', label: 'Patient Wizard' },
             { path: '/trial-matcher', icon: '🏥', label: 'Trial Matcher' },

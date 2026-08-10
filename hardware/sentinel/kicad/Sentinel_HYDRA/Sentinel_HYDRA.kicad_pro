@@ -660,7 +660,7 @@
     "last_paths": {
       "idf": "",
       "netlist": "",
-      "plot": "",
+      "plot": "gerbersnew/",
       "specctra_dsn": "Sentinel_HYDRA.dsn",
       "vrml": ""
     },

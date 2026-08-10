@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import React from 'react';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API = import.meta.env.PROD ? 'https://carvanta.onrender.com' : '';
 
 const S = {
   page: { maxWidth: 1200, margin: '0 auto', padding: 20, fontFamily: "'Inter',system-ui,sans-serif" } as React.CSSProperties,

@@ -33,11 +33,38 @@ FEATURE_NAMES = [
     "surface_accessibility",
     "clinical_boost",
     "composite_score",
+    "cancer_type_encoded",
 ]
 
+# v5: Cancer type encoding map — loaded from training report
+_CANCER_TYPE_MAP = {}
+try:
+    import json as _json
+    _report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "training_report.json")
+    if os.path.exists(_report_path):
+        with open(_report_path) as _f:
+            _report = _json.load(_f)
+            _CANCER_TYPE_MAP = _report.get("cancer_type_encoding", {})
+except Exception:
+    pass
 
-def _engineer(features: dict) -> dict:
-    """Compute derived features from the raw feature dict (v2)."""
+
+def _encode_cancer_type(cancer_type: str) -> float:
+    """Encode cancer type to normalized float matching training encoding."""
+    if not _CANCER_TYPE_MAP:
+        return 0.0
+    ct = cancer_type.lower().strip()
+    max_id = max(_CANCER_TYPE_MAP.values()) if _CANCER_TYPE_MAP else 1
+    ct_id = _CANCER_TYPE_MAP.get(ct, max_id / 2)  # Unknown cancer types get middle value
+    return round(ct_id / max(max_id, 1), 3)
+
+
+def _engineer(features: dict, cancer_type: str = "") -> dict:
+    """Compute derived features from the raw feature dict (v5).
+    
+    v5: Added cancer_type_encoded so the model produces different
+    predictions for the same antigen in different cancer contexts.
+    """
     ts = features["tumor_specificity"]
     ner = features["normal_expression_risk"]
     stab = features["stability_score"]
@@ -63,6 +90,9 @@ def _engineer(features: dict) -> dict:
         0.05 * clinical_boost
     )
 
+    # v5: Cancer type encoding
+    ct_encoded = _encode_cancer_type(cancer_type) if cancer_type else 0.0
+
     return {
         "tumor_specificity": ts,
         "normal_expression_risk": ner,
@@ -73,25 +103,29 @@ def _engineer(features: dict) -> dict:
         "surface_accessibility": surface,
         "clinical_boost": clinical_boost,
         "composite_score": round(composite, 3),
+        "cancer_type_encoded": ct_encoded,
     }
 
 
-def predict_viability(features: dict) -> dict:
+def predict_viability(features: dict, cancer_type: str = "") -> dict:
     """
-    Predict viability for a single antigen (v2).
+    Predict viability for a single antigen (v5).
 
     Parameters
     ----------
     features : dict with keys tumor_specificity, normal_expression_risk,
                stability_score, literature_support, and optionally
                immunogenicity_score, surface_accessibility, clinical_trials_count
+    cancer_type : str, optional
+        Cancer type context (e.g., 'Leukemia', 'Melanoma').
+        Different cancer types produce different predictions.
 
     Returns
     -------
     dict with prediction, confidence, confidence_label, importance, contributions
     """
 
-    eng = _engineer(features)
+    eng = _engineer(features, cancer_type=cancer_type)
 
     input_data = np.array([[eng[f] for f in FEATURE_NAMES]])
 
@@ -143,13 +177,13 @@ def predict_viability(features: dict) -> dict:
     }
 
 
-def predict_ranking_score(features: dict) -> float:
+def predict_ranking_score(features: dict, cancer_type: str = "") -> float:
     """
-    CARVanta v4: Predict a continuous Clinical Success Probability (0.0–1.0)
+    CARVanta v5: Predict a continuous Clinical Success Probability (0.0–1.0)
     using the trained XGBRegressor ranker.
 
-    This score is meant to be BLENDED with the rule-based CVS to produce
-    adaptive, ML-driven rankings that differ per antigen and context.
+    v5: Now cancer-type-aware — the same antigen will receive different
+    ranking scores depending on the cancer context.
 
     Returns
     -------
@@ -159,21 +193,23 @@ def predict_ranking_score(features: dict) -> float:
     if ranker is None:
         return 0.5  # Neutral fallback
 
-    eng = _engineer(features)
+    eng = _engineer(features, cancer_type=cancer_type)
     input_data = np.array([[eng[f] for f in FEATURE_NAMES]])
     score = float(ranker.predict(input_data)[0])
     return max(0.0, min(1.0, score))  # Clip to [0, 1]
 
 
-def predict_ranking_scores_batch(features_list: list) -> np.ndarray:
+def predict_ranking_scores_batch(features_list: list, cancer_types: list = None) -> np.ndarray:
     """
-    CARVanta v4: Batch predict ranking scores for multiple antigens at once.
+    CARVanta v5: Batch predict ranking scores for multiple antigens at once.
     Much faster than calling predict_ranking_score() in a loop.
 
     Parameters
     ----------
     features_list : list of dict
         Each dict contains tumor_specificity, normal_expression_risk, etc.
+    cancer_types : list of str, optional
+        Cancer type for each entry. If None, uses empty string for all.
 
     Returns
     -------
@@ -184,10 +220,14 @@ def predict_ranking_scores_batch(features_list: list) -> np.ndarray:
     if ranker is None or n == 0:
         return np.full(n, 0.5)
 
+    if cancer_types is None:
+        cancer_types = [""] * n
+
     # Engineer all features and build matrix at once
     rows = []
-    for features in features_list:
-        eng = _engineer(features)
+    for i, features in enumerate(features_list):
+        ct = cancer_types[i] if i < len(cancer_types) else ""
+        eng = _engineer(features, cancer_type=ct)
         rows.append([eng[f] for f in FEATURE_NAMES])
 
     input_data = np.array(rows)

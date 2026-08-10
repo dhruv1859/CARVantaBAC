@@ -26,6 +26,7 @@ const MFASetup = lazy(() => import('./pages/MFASetup'));
 const BillingPage = lazy(() => import('./pages/BillingPage'));
 const OrgManagement = lazy(() => import('./pages/OrgManagement'));
 const GenomicProfiler = lazy(() => import('./pages/GenomicProfiler'));
+const GenomicUpload = lazy(() => import('./pages/GenomicUpload'));
 const AdverseEvents = lazy(() => import('./pages/AdverseEvents'));
 const OutcomesTracker = lazy(() => import('./pages/OutcomesTracker'));
 const PopulationSimulator = lazy(() => import('./pages/PopulationSimulator'));
@@ -93,6 +94,7 @@ function ProtectedApp() {
           <Route path="/billing" element={<BillingPage />} />
           <Route path="/organizations" element={<OrgManagement />} />
           <Route path="/genomics" element={<GenomicProfiler />} />
+          <Route path="/genome-upload" element={<GenomicUpload />} />
           <Route path="/adverse-events" element={<AdverseEvents />} />
           <Route path="/outcomes" element={<OutcomesTracker />} />
           <Route path="/population" element={<PopulationSimulator />} />

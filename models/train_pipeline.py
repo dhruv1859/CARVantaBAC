@@ -38,7 +38,9 @@ RANKER_PATH = os.path.join(BASE_DIR, "models", "car_t_ranker.pkl")
 REPORT_PATH = os.path.join(BASE_DIR, "data", "training_report.json")
 CV_REPORT_PATH = os.path.join(BASE_DIR, "data", "cross_validation_report.json")
 
-# ─── Feature engineering (v2) ──────────────────────────────────────────────────
+# ─── Feature engineering (v5) ──────────────────────────────────────────────────
+# v5: Added cancer_type_encoded so the model learns cancer-specific scoring
+# patterns, breaking the deterministic single-antigen-lookup problem.
 ENGINEERED_FEATURES = [
     "tumor_specificity",
     "normal_expression_risk",
@@ -49,11 +51,31 @@ ENGINEERED_FEATURES = [
     "surface_accessibility",
     "clinical_boost",
     "composite_score",
+    "cancer_type_encoded",
 ]
 
 
+# Cancer type to numeric encoding for ML features
+_CANCER_TYPE_MAP = {}
+_NEXT_CANCER_ID = [0]
+
+def _encode_cancer_type(ct: str) -> float:
+    """Encode cancer type string to a normalized float [0, 1]."""
+    ct = str(ct).lower().strip()
+    if ct not in _CANCER_TYPE_MAP:
+        _CANCER_TYPE_MAP[ct] = _NEXT_CANCER_ID[0]
+        _NEXT_CANCER_ID[0] += 1
+    # Normalize to [0, 1] range — will be re-normalized after all types are seen
+    return _CANCER_TYPE_MAP[ct]
+
+
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute derived features from raw expression values (v2)."""
+    """Compute derived features from raw expression values (v5).
+    
+    v5: Added cancer_type_encoded so the model can learn
+    cancer-specific scoring patterns. The same antigen in different
+    cancer types will have different feature vectors.
+    """
     df = df.copy()
 
     t = df["mean_tumor_expression"]
@@ -90,14 +112,30 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
         0.05 * df["clinical_boost"]
     ).round(3)
 
+    # v5: Cancer type encoding — gives model cancer-context awareness
+    if "cancer_type" in df.columns:
+        df["cancer_type_encoded"] = df["cancer_type"].apply(_encode_cancer_type)
+        # Normalize to [0, 1] after all types are encoded
+        max_ct = df["cancer_type_encoded"].max()
+        if max_ct > 0:
+            df["cancer_type_encoded"] = (df["cancer_type_encoded"] / max_ct).round(3)
+    else:
+        df["cancer_type_encoded"] = 0.0
+
     return df
 
 
 def train():
-    """Main training pipeline (v4)."""
+    """Main training pipeline (v5).
+    
+    v5 fixes: Adds noise augmentation to prevent the model from perfectly
+    memorizing the deterministic CVS formula. Without this, the model
+    just learns to replicate the rule-based score, adding zero value.
+    """
 
     print("=" * 60)
-    print("  CARVanta ML Training Pipeline v4")
+    print("  CARVanta ML Training Pipeline v5")
+    print("  (Cancer-Context-Aware + Noise-Augmented)")
     print("=" * 60)
 
     # ── Load data ────────────────────────────────────────────────────────────
@@ -112,15 +150,30 @@ def train():
     X = df[ENGINEERED_FEATURES].values
     y = df["viability_label"].values
 
+    # v5: Noise augmentation — add small Gaussian noise to features
+    # to prevent the model from perfectly memorizing the deterministic
+    # formula. This forces the model to learn robust patterns rather
+    # than just replicating the weighted sum.
+    rng = np.random.RandomState(42)
+    noise_scale = 0.03  # ±3% noise on each feature
+    X_noisy = X + rng.normal(0, noise_scale, size=X.shape)
+    X_noisy = np.clip(X_noisy, 0, 1)  # Keep features in [0, 1]
+    
+    # Combine original + noisy data for training robustness
+    X_augmented = np.vstack([X, X_noisy])
+    y_augmented = np.concatenate([y, y])
+    
     viable_count = int(y.sum())
     total = len(y)
     print(f"  Features: {ENGINEERED_FEATURES}")
+    print(f"  Original rows: {total:,}")
+    print(f"  Augmented rows: {len(y_augmented):,} (2x with noise)")
     print(f"  Viable: {viable_count:,} ({viable_count/total:.1%})")
     print(f"  Non-viable: {total - viable_count:,} ({(total - viable_count)/total:.1%})")
 
     # ── Define models ────────────────────────────────────────────────────────
     rf = RandomForestClassifier(
-        n_estimators=200,
+        n_estimators=100,
         max_depth=12,
         min_samples_split=10,
         min_samples_leaf=4,
@@ -131,8 +184,8 @@ def train():
 
     if HAS_XGB:
         xgb = XGBClassifier(
-            n_estimators=200,
-            max_depth=8,
+            n_estimators=100,
+            max_depth=6,
             learning_rate=0.1,
             subsample=0.8,
             colsample_bytree=0.8,
@@ -150,13 +203,13 @@ def train():
         ensemble = rf
 
     # ── Cross-validation with per-fold metrics ────────────────────────────────
-    print("\n  Running 5-fold stratified cross-validation...")
+    print("\n  Running 5-fold stratified cross-validation (on augmented data)...")
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
-    # Multi-metric CV
+    # Multi-metric CV on augmented data
     scoring_metrics = ["accuracy", "precision", "recall", "f1", "roc_auc"]
     cv_results = cross_validate(
-        ensemble, X, y, cv=cv,
+        ensemble, X_augmented, y_augmented, cv=cv,
         scoring=scoring_metrics,
         return_train_score=False,
     )
@@ -189,9 +242,10 @@ def train():
         print(f"    {metric:<12} {vals['mean']:.4f} ± {vals['std']:.4f}")
 
     # ── Train final model on full data ───────────────────────────────────────
-    print("\n  Training final model on full dataset...")
-    ensemble.fit(X, y)
+    print("\n  Training final model on augmented dataset...")
+    ensemble.fit(X_augmented, y_augmented)
 
+    # Evaluate on original (non-noisy) data to get true metrics
     preds = ensemble.predict(X)
     train_acc = accuracy_score(y, preds)
     train_prec = precision_score(y, preds, zero_division=0)
@@ -244,9 +298,10 @@ def train():
 
     # ── Save report ──────────────────────────────────────────────────────────
     report = {
-        "version": "v3",
+        "version": "v5",
         "features": ENGINEERED_FEATURES,
         "dataset_rows": len(df),
+        "augmented_rows": len(y_augmented),
         "viable_count": viable_count,
         "cv_metrics": cv_aggregate,
         "cv_fold_results": fold_results,
@@ -255,6 +310,7 @@ def train():
         "train_recall": round(train_rec, 4),
         "train_f1": round(train_f1, 4),
         "feature_importance": importance,
+        "cancer_type_encoding": dict(_CANCER_TYPE_MAP),
     }
     with open(REPORT_PATH, "w") as f:
         json.dump(report, f, indent=2)
@@ -301,6 +357,11 @@ def train_ranker():
 
     X = df[ENGINEERED_FEATURES].values
 
+    # v5: Add noise augmentation for ranker too
+    rng = np.random.RandomState(42)
+    X_noisy = X + rng.normal(0, 0.03, size=X.shape)
+    X_noisy = np.clip(X_noisy, 0, 1)
+
     # ── Compute continuous success target ──────────────────────────────────
     # This is the key innovation: instead of binary 0/1, we create a
     # continuous target (0.0 - 1.0) that represents clinical success
@@ -330,15 +391,21 @@ def train_ranker():
         0.10 * ((lit + stab) / 2)
     ).clip(0, 1)
 
-    print(f"  Training data: {len(df):,} rows")
+    # Augment target with noise for noisy features
+    y_noisy = y_continuous + rng.normal(0, 0.02, size=y_continuous.shape)
+    y_noisy = np.clip(y_noisy, 0, 1)
+    X_aug = np.vstack([X, X_noisy])
+    y_aug = np.concatenate([y_continuous, y_noisy])
+
+    print(f"  Training data: {len(df):,} rows (augmented: {len(y_aug):,})")
     print(f"  Target range: [{y_continuous.min():.3f}, {y_continuous.max():.3f}]")
     print(f"  Target mean:  {y_continuous.mean():.3f}")
 
     # ── Train XGBRegressor ─────────────────────────────────────────────────
     ranker = XGBRegressor(
-        n_estimators=300,
-        max_depth=8,
-        learning_rate=0.05,
+        n_estimators=150,
+        max_depth=6,
+        learning_rate=0.1,
         subsample=0.8,
         colsample_bytree=0.8,
         reg_alpha=0.1,
@@ -346,18 +413,18 @@ def train_ranker():
         random_state=42,
     )
 
-    # 5-fold cross-validation for regression
+    # 3-fold cross-validation (faster than 5-fold with augmented data)
     from sklearn.model_selection import KFold, cross_val_score
-    kf = KFold(n_splits=5, shuffle=True, random_state=42)
-    cv_r2 = cross_val_score(ranker, X, y_continuous, cv=kf, scoring="r2")
-    cv_mae = -cross_val_score(ranker, X, y_continuous, cv=kf, scoring="neg_mean_absolute_error")
+    kf = KFold(n_splits=3, shuffle=True, random_state=42)
+    cv_r2 = cross_val_score(ranker, X_aug, y_aug, cv=kf, scoring="r2")
+    cv_mae = -cross_val_score(ranker, X_aug, y_aug, cv=kf, scoring="neg_mean_absolute_error")
 
-    print(f"\n  Cross-Validation (5-fold):")
+    print(f"\n  Cross-Validation (3-fold):")
     print(f"    R²:  {cv_r2.mean():.4f} ± {cv_r2.std():.4f}")
     print(f"    MAE: {cv_mae.mean():.4f} ± {cv_mae.std():.4f}")
 
     # Train on full data
-    ranker.fit(X, y_continuous)
+    ranker.fit(X_aug, y_aug)
 
     # Training set predictions
     y_pred = ranker.predict(X)

@@ -31,7 +31,10 @@ logger = logging.getLogger("carvanta.genomics.file_processor")
 # Constants & Configuration
 # ──────────────────────────────────────────────────────────────────────
 
-ALLOWED_EXTENSIONS: Set[str] = {".vcf", ".vcf.gz", ".bam", ".fastq", ".fastq.gz", ".fq", ".fq.gz"}
+ALLOWED_EXTENSIONS: Set[str] = {
+    ".vcf", ".vcf.gz", ".bam", ".fastq", ".fastq.gz", ".fq", ".fq.gz",
+    ".fasta", ".fa", ".fasta.gz", ".fa.gz",
+}
 MAX_FILE_SIZE_BYTES: int = 500 * 1024 * 1024  # 500 MB
 UPLOAD_DIR: str = os.environ.get("GENOMICS_UPLOAD_DIR", "data/uploads/genomics")
 CHUNK_SIZE: int = 8192
@@ -62,6 +65,7 @@ class FileType(Enum):
     VCF = "vcf"
     BAM = "bam"
     FASTQ = "fastq"
+    FASTA = "fasta"
     UNKNOWN = "unknown"
 
 
@@ -212,6 +216,37 @@ class FastqRead:
 
 
 @dataclass
+class FastaSequence:
+    """Parsed FASTA sequence entry."""
+    sequence_id: str
+    description: str
+    sequence: str
+    source_file: str = ""
+
+    @property
+    def length(self) -> int:
+        return len(self.sequence)
+
+    @property
+    def gc_content(self) -> float:
+        if not self.sequence:
+            return 0.0
+        gc = sum(1 for b in self.sequence.upper() if b in "GC")
+        return gc / len(self.sequence)
+
+    @property
+    def n_count(self) -> int:
+        """Count ambiguous bases (N)."""
+        return sum(1 for b in self.sequence.upper() if b == "N")
+
+    @property
+    def n_fraction(self) -> float:
+        if not self.sequence:
+            return 0.0
+        return self.n_count / len(self.sequence)
+
+
+
 class FileProcessingStats:
     """Statistics from file processing."""
     total_records: int = 0
@@ -270,6 +305,8 @@ def detect_file_type(filename: str) -> FileType:
         return FileType.BAM
     elif lower.endswith((".fastq", ".fastq.gz", ".fq", ".fq.gz")):
         return FileType.FASTQ
+    elif lower.endswith((".fasta", ".fa", ".fasta.gz", ".fa.gz")):
+        return FileType.FASTA
     return FileType.UNKNOWN
 
 
@@ -378,6 +415,10 @@ def _verify_magic_bytes(data: bytes, file_type: FileType) -> bool:
         if data[:2] == b"\x1f\x8b":  # gzip
             return True
         return data[:1] == b"@"
+    elif file_type == FileType.FASTA:
+        if data[:2] == b"\x1f\x8b":  # gzip
+            return True
+        return data[:1] == b">"  # FASTA starts with >
     return False
 
 
@@ -396,6 +437,9 @@ def _extract_header_metadata(data: bytes, file_type: FileType) -> Dict[str, Any]
         meta["reference"] = "GRCh38"
         meta["sample_count"] = 1
     elif file_type == FileType.FASTQ:
+        meta["reference"] = "N/A"
+        meta["sample_count"] = 1
+    elif file_type == FileType.FASTA:
         meta["reference"] = "N/A"
         meta["sample_count"] = 1
 
@@ -1220,6 +1264,14 @@ async def process_genomic_file(
         )
         records = fastq_reads
 
+    elif validation.file_type == FileType.FASTA:
+        fasta_seqs, stats = await parse_fasta_sequences(
+            file_data,
+            max_sequences=options.get("max_sequences", 100000),
+            source_filename=validation.sanitized_filename,
+        )
+        records = fasta_seqs
+
     return {
         "success": True,
         "file_path": saved_path,
@@ -1239,3 +1291,89 @@ async def process_genomic_file(
         },
         "record_count": len(records),
     }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# FASTA Parser
+# ──────────────────────────────────────────────────────────────────────
+
+async def parse_fasta_sequences(
+    file_data: bytes,
+    max_sequences: int = 100000,
+    source_filename: str = "",
+) -> Tuple[List[FastaSequence], FileProcessingStats]:
+    """
+    Parse FASTA file data into FastaSequence objects with quality metrics.
+
+    Args:
+        file_data: Raw file bytes (plain or gzipped)
+        max_sequences: Safety cap on number of sequences
+        source_filename: Original filename for tracking
+
+    Returns:
+        Tuple of (fasta sequences, processing stats)
+    """
+    import time
+    start_time = time.monotonic()
+
+    sequences: List[FastaSequence] = []
+    stats = FileProcessingStats(file_type=FileType.FASTA)
+
+    current_id = ""
+    current_desc = ""
+    current_seq_parts: List[str] = []
+
+    def _flush_sequence():
+        """Save current accumulated sequence."""
+        nonlocal current_id, current_desc, current_seq_parts
+        if current_id and current_seq_parts:
+            seq_str = "".join(current_seq_parts)
+            seq = FastaSequence(
+                sequence_id=current_id,
+                description=current_desc,
+                sequence=seq_str,
+                source_file=source_filename,
+            )
+            sequences.append(seq)
+            stats.passed_records += 1
+
+            # Track length distribution
+            length_bucket = "short" if len(seq_str) < 100 else "medium" if len(seq_str) < 1000 else "long"
+            stats.quality_distribution[length_bucket] = stats.quality_distribution.get(length_bucket, 0) + 1
+
+        current_id = ""
+        current_desc = ""
+        current_seq_parts = []
+
+    async for line in stream_decompress_file(file_data):
+        if line.startswith(">"):
+            # Flush previous sequence
+            _flush_sequence()
+
+            stats.total_records += 1
+            if stats.total_records > max_sequences:
+                stats.error_messages.append(f"Sequence limit reached ({max_sequences})")
+                break
+
+            # Parse header: >seq_id description
+            header = line[1:].strip()
+            parts = header.split(None, 1)
+            current_id = parts[0] if parts else f"seq_{stats.total_records}"
+            current_desc = parts[1] if len(parts) > 1 else ""
+        else:
+            # Sequence line — accumulate
+            cleaned = line.strip().upper()
+            if cleaned:
+                current_seq_parts.append(cleaned)
+
+    # Flush final sequence
+    _flush_sequence()
+
+    elapsed = (time.monotonic() - start_time) * 1000
+    stats.processing_time_ms = round(elapsed, 2)
+
+    logger.info(
+        f"FASTA parsed: {stats.total_records} total, {stats.passed_records} passed "
+        f"in {stats.processing_time_ms:.1f}ms"
+    )
+    return sequences, stats

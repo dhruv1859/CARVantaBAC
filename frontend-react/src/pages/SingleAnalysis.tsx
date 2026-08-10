@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { scoreAntigen, fetchAntigens, fetchDrugInteractions, fetchExplanation, fetchCitation, fetchFHIR, fetchPatents, fetchGeneIds, fetchScoreHistory, recordSnapshot } from '../api/client';
+import { scoreAntigen, fetchAntigens, fetchDrugInteractions, fetchExplanation, fetchCitation, fetchFHIR, fetchPatents, fetchGeneIds, fetchScoreHistory, recordSnapshot, fetchCancerTypes } from '../api/client';
 import { TierBadge, DataSourceBadge, ScoreCircle, FeatureBar, Loading, ErrorMsg } from '../components/UIComponents';
 import PipelineVisualizer from '../components/PipelineVisualizer';
 import { Radar } from 'react-chartjs-2';
@@ -15,6 +15,8 @@ export default function SingleAnalysis() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [pipelineRunning, setPipelineRunning] = useState(false);
+    const [cancerTypes, setCancerTypes] = useState<string[]>([]);
+    const [cancerType, setCancerType] = useState('');
 
     // v5 state
     const [drugData, setDrugData] = useState<any>(null);
@@ -32,6 +34,12 @@ export default function SingleAnalysis() {
             .catch(() => setAntigens([]));
     }, [search]);
 
+    useEffect(() => {
+        fetchCancerTypes()
+            .then((data: any) => setCancerTypes(data?.cancer_types || []))
+            .catch(() => setCancerTypes([]));
+    }, []);
+
     const handleScore = async () => {
         if (!selected) return;
         setLoading(true); setError(''); setResult(null);
@@ -40,7 +48,7 @@ export default function SingleAnalysis() {
         setPatentData(null); setGeneIdData(null); setHistoryData(null);
 
         try {
-            const data = await scoreAntigen(selected);
+            const data = await scoreAntigen(selected, cancerType || undefined);
             setResult(data);
 
             // Fire v5 enrichments in parallel
@@ -139,6 +147,13 @@ export default function SingleAnalysis() {
                         <select className="form-control" value={selected} onChange={e => setSelected(e.target.value)}>
                             <option value="">-- select --</option>
                             {antigens.map(a => <option key={a} value={a}>{a}</option>)}
+                        </select>
+                    </div>
+                    <div className="form-group">
+                        <label>Cancer Context <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>(optional)</span></label>
+                        <select className="form-control" value={cancerType} onChange={e => setCancerType(e.target.value)}>
+                            <option value="">All (Global Score)</option>
+                            {cancerTypes.map(ct => <option key={ct} value={ct}>{ct}</option>)}
                         </select>
                     </div>
                     <button className="btn btn-primary" onClick={handleScore} disabled={!selected || loading}>

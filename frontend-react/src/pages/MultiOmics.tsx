@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import '../styles/digital-twin.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API = import.meta.env.PROD ? 'https://carvanta.onrender.com' : '';
 
 const LAYER_INFO: Record<string, { icon: string; color: string; label: string }> = {
   transcriptomics: { icon: '🧬', color: '#22c55e', label: 'Transcriptomics' },
