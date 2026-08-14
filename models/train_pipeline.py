@@ -287,7 +287,7 @@ def train():
             }
             print("\n  Feature Importance:")
             for feat, val in sorted(importance.items(), key=lambda x: x[1], reverse=True):
-                bar = "█" * int(val * 50)
+                bar = "#" * int(val * 50)
                 print(f"    {feat:<25s} {val:.4f}  {bar}")
     except Exception:
         pass
@@ -445,7 +445,7 @@ def train_ranker():
         }
         print("\n  Ranker Feature Importance:")
         for feat, val in sorted(importance.items(), key=lambda x: x[1], reverse=True):
-            bar = "█" * int(val * 50)
+            bar = "#" * int(val * 50)
             print(f"    {feat:<25s} {val:.4f}  {bar}")
 
     # Save ranker
@@ -459,7 +459,7 @@ def train_ranker():
         known_preds = ranker.predict(known_X)
         print("\n  Verification — Predicted Clinical Success Probability:")
         for i, (_, row) in enumerate(known.iterrows()):
-            print(f"    {row['antigen_name']:>12s} ({row['cancer_type']:<20s}) → {known_preds[i]:.3f}")
+            print(f"    {row['antigen_name']:>12s} ({row['cancer_type']:<20s}) -> {known_preds[i]:.3f}")
 
     print("\n" + "=" * 60)
     return {"cv_r2_mean": round(cv_r2.mean(), 4), "cv_mae_mean": round(cv_mae.mean(), 4)}

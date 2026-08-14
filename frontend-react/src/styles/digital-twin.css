@@ -1904,3 +1904,735 @@
   .twin-tabs button { padding: 6px 8px; font-size: 10px; }
   .dt-tab { padding: 7px 10px; font-size: 11px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   3D Biological Digital Twin — In-Silico Simulation Styles
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Full-viewport 3D simulation container */
+.bio-sim-container {
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 130px);
+    min-height: 520px;
+    background: #050510;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(99, 102, 241, 0.12);
+    box-shadow: 0 0 60px rgba(99, 102, 241, 0.06), inset 0 0 80px rgba(5, 5, 16, 0.8);
+}
+
+.bio-sim-canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+    cursor: grab;
+}
+
+.bio-sim-canvas:active {
+    cursor: grabbing;
+}
+
+/* ─── HUD Vitals Overlay (top-left) ─────────────────────────────────────── */
+.bio-hud-overlay {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    max-width: 560px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.bio-vital-chip {
+    background: rgba(5, 5, 20, 0.7);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 8px 14px;
+    display: flex;
+    flex-direction: column;
+    min-width: 90px;
+    pointer-events: auto;
+    transition: border-color 0.3s;
+}
+
+.bio-vital-chip:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.bio-vital-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    margin-bottom: 2px;
+}
+
+.bio-vital-value {
+    font-size: 16px;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    color: #f1f5f9;
+}
+
+.bio-vital-sub {
+    font-size: 9px;
+    color: #475569;
+    margin-top: 1px;
+}
+
+/* ─── Layer Toggle Pills (top-right) ────────────────────────────────────── */
+.bio-toggle-bar {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 10;
+}
+
+.bio-toggle-pill {
+    background: rgba(5, 5, 20, 0.7);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.25s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.bio-toggle-pill .toggle-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #334155;
+    transition: all 0.25s;
+}
+
+.bio-toggle-pill.active {
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #c7d2fe;
+}
+
+.bio-toggle-pill.active .toggle-dot {
+    background: #818cf8;
+    box-shadow: 0 0 8px #818cf8;
+}
+
+.bio-toggle-pill:hover {
+    border-color: rgba(99, 102, 241, 0.25);
+    color: #94a3b8;
+}
+
+/* ─── Simulation Status Badge (top-center) ──────────────────────────────── */
+.bio-status-badge {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(5, 5, 20, 0.75);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(78, 205, 196, 0.2);
+    border-radius: 20px;
+    padding: 6px 18px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #4ECDC4;
+    letter-spacing: 0.08em;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bio-status-badge .pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #4ECDC4;
+    box-shadow: 0 0 8px #4ECDC4;
+    animation: bio-pulse 2s infinite;
+}
+
+@keyframes bio-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* ─── Timeline Bar (bottom) ─────────────────────────────────────────────── */
+.bio-timeline-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(5, 5, 20, 0.85);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 12px 20px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.bio-timeline-day {
+    font-size: 13px;
+    font-weight: 800;
+    color: #818cf8;
+    font-family: 'JetBrains Mono', monospace;
+    min-width: 90px;
+}
+
+.bio-timeline-day span {
+    font-size: 10px;
+    color: #475569;
+    font-weight: 600;
+}
+
+.bio-timeline-slider {
+    flex: 1;
+    accent-color: #6366f1;
+    cursor: pointer;
+    height: 4px;
+}
+
+.bio-play-btn {
+    padding: 7px 16px;
+    border-radius: 8px;
+    border: none;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.bio-play-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.45);
+}
+
+.bio-milestones {
+    display: flex;
+    gap: 4px;
+}
+
+.bio-milestone {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.bio-milestone:hover,
+.bio-milestone.active {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    border-color: rgba(99, 102, 241, 0.4);
+}
+
+/* ─── Organ Inspector Panel (glassmorphism, slides in from right) ─────── */
+.bio-organ-panel {
+    position: absolute;
+    top: 60px;
+    right: 14px;
+    width: 340px;
+    max-height: calc(100% - 140px);
+    overflow-y: auto;
+    background: rgba(8, 8, 24, 0.82);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: 16px;
+    padding: 20px;
+    z-index: 20;
+    animation: bio-panel-in 0.35s ease-out;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(99, 102, 241, 0.05);
+}
+
+@keyframes bio-panel-in {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+.bio-organ-panel::-webkit-scrollbar {
+    width: 4px;
+}
+
+.bio-organ-panel::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.3);
+    border-radius: 4px;
+}
+
+.bio-panel-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.bio-panel-close:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.bio-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bio-panel-icon {
+    font-size: 28px;
+}
+
+.bio-panel-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: #f1f5f9;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.bio-panel-subtitle {
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+.bio-risk-tag {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-bottom: 14px;
+}
+
+.bio-metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.bio-metric-cell {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 10px 12px;
+    border-radius: 8px;
+}
+
+.bio-metric-name {
+    font-size: 9px;
+    color: #64748b;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 3px;
+}
+
+.bio-metric-val {
+    font-size: 14px;
+    font-weight: 800;
+    color: #e2e8f0;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.bio-mechanism-box {
+    background: rgba(30, 41, 59, 0.4);
+    border-left: 3px solid #6366f1;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1.65;
+    color: #94a3b8;
+    margin-bottom: 10px;
+}
+
+.bio-mechanism-box strong {
+    color: #c7d2fe;
+}
+
+.bio-protocol-box {
+    background: rgba(16, 185, 129, 0.06);
+    border: 1px solid rgba(16, 185, 129, 0.15);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 11px;
+    color: #6ee7b7;
+    line-height: 1.5;
+}
+
+.bio-protocol-box strong {
+    color: #a7f3d0;
+}
+
+/* ─── Responsive adjustments ────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .bio-sim-container {
+        height: calc(100vh - 110px);
+        border-radius: 10px;
+    }
+
+    .bio-organ-panel {
+        width: 280px;
+        right: 8px;
+        top: 50px;
+    }
+
+    .bio-hud-overlay {
+        max-width: 320px;
+    }
+
+    .bio-milestones {
+        display: none;
+    }
+
+    .bio-timeline-bar {
+        padding: 10px 12px;
+    }
+}
+
+
+/* Vitals Telemetry HUD */
+.body-vitals-hud {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 14px;
+    backdrop-filter: blur(12px);
+}
+
+.vital-card {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+}
+
+.vital-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+    margin-bottom: 2px;
+}
+
+.vital-value {
+    font-size: 18px;
+    font-weight: 800;
+    color: #f8fafc;
+    font-family: monospace;
+}
+
+.vital-sub {
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+/* Main Body Canvas + Inspector Grid */
+.body-canvas-grid {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 16px;
+}
+
+@media (max-width: 900px) {
+    .body-canvas-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Anatomical Body Canvas Card */
+.body-canvas-card {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.body-canvas-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.body-canvas-header h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin: 0;
+}
+
+.body-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.body-svg-wrapper {
+    position: relative;
+    width: 280px;
+    height: 480px;
+}
+
+.human-silhouette-svg {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 0 15px rgba(99, 102, 241, 0.1));
+}
+
+/* Interactive Organ Node Buttons */
+.organ-node-btn {
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.organ-node-btn:hover circle.node-glow {
+    r: 18;
+    opacity: 0.6;
+}
+
+.organ-node-btn.active circle.node-core {
+    stroke: #ffffff;
+    stroke-width: 2.5;
+}
+
+.organ-node-btn text {
+    font-size: 8px;
+    font-weight: 700;
+    fill: #f8fafc;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* Time Navigation Playback Controller */
+.time-playback-card {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.time-ctrl-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.time-day-display {
+    font-size: 20px;
+    font-weight: 800;
+    color: #6366f1;
+    font-family: monospace;
+}
+
+.play-pause-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    transition: all 0.2s;
+}
+
+.play-pause-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+}
+
+.time-slider-input {
+    width: 100%;
+    accent-color: #6366f1;
+    cursor: pointer;
+}
+
+.time-milestones {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+}
+
+.milestone-btn {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.milestone-btn:hover,
+.milestone-btn.active {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    border-color: rgba(99, 102, 241, 0.4);
+}
+
+/* Organ Microenvironment Inspector Card */
+.organ-inspector-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.organ-detail-card {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 20px;
+}
+
+.organ-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.organ-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.organ-icon {
+    font-size: 26px;
+}
+
+.organ-title-group h3 {
+    font-size: 16px;
+    font-weight: 800;
+    color: #f8fafc;
+    margin: 0;
+}
+
+.organ-sub {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.organ-risk-badge {
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.organ-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.organ-metric-box {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 10px 12px;
+    border-radius: 8px;
+}
+
+.organ-metric-name {
+    font-size: 10px;
+    color: #94a3b8;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.organ-metric-val {
+    font-size: 15px;
+    font-weight: 800;
+    color: #f1f5f9;
+    font-family: monospace;
+}
+
+.organ-mechanism-box {
+    background: rgba(30, 41, 59, 0.4);
+    border-left: 3px solid #6366f1;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #cbd5e1;
+    margin-bottom: 12px;
+}
+
+.organ-protocol-box {
+    background: rgba(16, 185, 129, 0.06);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #6ee7b7;
+}
+
+.organ-protocol-box strong {
+    color: #a7f3d0;
+}
+

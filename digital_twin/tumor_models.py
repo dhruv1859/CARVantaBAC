@@ -851,7 +851,15 @@ def simulate_with_cancer_profile(
     - Prognostic factors
     """
     
+    # Flexible profile lookup: key, name, code, or case-insensitive
     cancer = CANCER_PROFILES.get(cancer_type)
+    if not cancer:
+        query = (cancer_type or '').strip().lower()
+        for k, p in CANCER_PROFILES.items():
+            if k.lower() == query or p.name.lower() == query or p.code.lower() == query or query in p.name.lower():
+                cancer = p
+                break
+
     if not cancer:
         return {"error": f"Unknown cancer type: {cancer_type}. Available: {list(CANCER_PROFILES.keys())}"}
     
@@ -971,6 +979,7 @@ def simulate_with_cancer_profile(
             break
     
     return {
+        "cancer_type": cancer.name,
         "cancer_profile": {
             "name": cancer.name,
             "code": cancer.code,
@@ -992,6 +1001,12 @@ def simulate_with_cancer_profile(
             "pfs_days": pfs,
             "efficacy_score": round(overall_efficacy, 3),
         },
+        "tme": {
+            "tme_immunosuppression": round(cancer.tme_immunosuppression, 3),
+            "pd_l1_expression": round(cancer.pd_l1_expression, 3),
+            "treg_density": round(cancer.treg_density, 3),
+            "myeloid_suppression": round(cancer.myeloid_suppression, 3),
+        },
         "prognostic_factors": {
             "age_factor": round(age_factor, 3),
             "ecog_factor": round(ecog_factor, 3),
@@ -1006,13 +1021,18 @@ def get_cancer_profiles_summary() -> List[Dict]:
     """Return a summary of all available cancer profiles."""
     return [
         {
+            "key": key,
+            "cancer_type": key,
             "code": cancer.code,
             "name": cancer.name,
             "category": cancer.category,
             "doubling_time_days": cancer.doubling_time_days,
             "antigen_targets": cancer.antigen_targets,
+            "primary_target": cancer.antigen_targets[0] if cancer.antigen_targets else "CD19",
             "car_t_orr": f"{cancer.car_t_overall_response_rate * 100:.0f}%",
             "car_t_cr": f"{cancer.car_t_complete_response_rate * 100:.0f}%",
+            "typical_response_rate": round(cancer.car_t_overall_response_rate * 100, 1),
+            "median_pfs_months": round(cancer.doubling_time_days / 30 * 2.5, 1),
             "crs_risk": "high" if cancer.crs_risk_multiplier > 1.0 else "moderate" if cancer.crs_risk_multiplier > 0.7 else "low",
             "five_year_survival": f"{cancer.five_year_survival * 100:.0f}%",
         }
