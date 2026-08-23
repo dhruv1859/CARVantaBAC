@@ -22,7 +22,7 @@ alembic>=1.12.0
 psycopg2-binary>=2.9.0
 
 # Config & Security
-python-dotenv>=1.0.0
+python-dotenv>=1.2.3
 
 # HTTP
 requests>=2.31.0
