@@ -18,7 +18,7 @@ shap>=0.43.0
 
 # Database (Phase 2)
 sqlalchemy>=2.0.0
-alembic>=1.12.0
+alembic>=1.19.1
 psycopg2-binary>=2.9.0
 
 # Config & Security
