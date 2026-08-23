@@ -20,7 +20,7 @@ python-dotenv>=1.0.0
 
 # HTTP (for LLM API calls)
 httpx>=0.25.0
-requests>=2.31.0
+requests>=2.34.2
 
 # Database
 sqlalchemy>=2.0.0
