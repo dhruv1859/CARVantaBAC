@@ -2,7 +2,7 @@
 # Optimized for Railway free/hobby tier (~512MB RAM)
 
 # Core API
-fastapi>=0.104.0
+fastapi>=0.141.1
 uvicorn[standard]>=0.24.0
 pydantic>=2.5.0
 python-multipart>=0.0.6
